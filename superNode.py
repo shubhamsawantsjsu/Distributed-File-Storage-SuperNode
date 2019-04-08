@@ -139,18 +139,18 @@ def FileDelete(self, request, data):
         response = stub.FileDelete(fileService_pb2.FileInfo(username = request.username, filename = request.filename))
         
         if(response.success==True):
-            return fileService_pb2.ack(success=True message="File successfully deleted from cluster : ", fileMeta[0])
+            return fileService_pb2.ack(success=True, message="File successfully deleted from cluster : " + fileMeta[0])
         else:
-            return fileService_pb2.ack(success=False message="Internal error")
+            return fileService_pb2.ack(success=False, message="Internal error")
     
     if(channel2):
         stub = fileService_pb2_grpc.FileserviceStub(channel2)
         response = stub.FileDelete(fileService_pb2.FileInfo(username = request.username, filename = request.filename))
         
         if(response.success==True):
-            return fileService_pb2.ack(success=True message="File successfully deleted from cluster : ", fileMeta[0])
+            return fileService_pb2.ack(success=True, message="File successfully deleted from cluster : " + fileMeta[0])
         else:
-            return fileService_pb2.ack(success=False message="Internal error")
+            return fileService_pb2.ack(success=False, message="Internal error")
         
         print(response.message)
 
@@ -173,13 +173,13 @@ def FileSearch(self, request, data):
         stub = fileService_pb2_grpc.FileserviceStub(channel1)
         response = stub.FileSearch(fileService_pb2.FileInfo(username = request.username, filename = request.filename))
         if(response.success==True):
-            return fileService_pb2.ack(success=True, message="File exists in the cluster : ", fileMeta[0])
+            return fileService_pb2.ack(success=True, message="File exists in the cluster : " + fileMeta[0])
 
     elif(channel2):
         stub = fileService_pb2_grpc.FileserviceStub(channel2)
         response = stub.FileSearch(fileService_pb2.FileInfo(username = request.username, filename = request.filename))
         if(response.success==True):
-            return fileService_pb2.ack(success=True, message="File exists in the replica cluster : ", fileMeta[1])
+            return fileService_pb2.ack(success=True, message="File exists in the replica cluster : " + fileMeta[1])
     
     return fileService_pb2.ack(success=False, message="File does not exist in any cluster.")
 
@@ -203,6 +203,6 @@ def run_server(hostIP, port):
 
 # ----------------------Main-------------------- #
 if __name__ == '__main__':
-    hostIP = "localhost"
+    hostIP = "192.168.0.9"
     port = "9000"
     run_server(hostIP, port)
