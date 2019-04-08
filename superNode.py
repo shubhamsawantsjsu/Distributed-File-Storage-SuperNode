@@ -121,67 +121,69 @@ class FileServer(fileService_pb2_grpc.FileserviceServicer):
             
         resp = stub.UploadFile(streamData(username,filename,data))
 
-def FileDelete(self, request, data):
-    fileMeta = db.parseMetaData(request.username, request.filename)
-    
-    primaryIP, replicaIP = -1,-1
-    channel1, channel2 = -1,-1
-    if(fileMeta[0] in self.clusterLeaders): 
-        primaryIP = self.clusterLeaders[fileMeta[0]]
-        channel1 = self.clusterStatus.isChannelAlive(primaryIP)
+    def FileDelete(self, request, context):
+        fileMeta = db.parseMetaData(request.username, request.filename)
+
+        primaryIP, replicaIP = -1,-1
+        channel1, channel2 = -1,-1
+        if(fileMeta[0] in self.clusterLeaders): 
+            primaryIP = self.clusterLeaders[fileMeta[0]]
+            channel1 = self.clusterStatus.isChannelAlive(primaryIP)
+            
+        if(fileMeta[1] in self.clusterLeaders):
+            replicaIP = self.clusterLeaders[fileMeta[1]]
+            channel2 = self.clusterStatus.isChannelAlive(replicaIP)
+        if(channel1):
+            stub = fileService_pb2_grpc.FileserviceStub(channel1)
+            response = stub.FileDelete(fileService_pb2.FileInfo(username = request.username, filename = request.filename))
+            
+            if(response.success==True):
+                print("Successfully Deleted from primary")
+                yield fileService_pb2.ack(success=True, message="File successfully deleted from cluster : " + fileMeta[0])
+            else:
+                print("Could not delete from primary")
+                yield fileService_pb2.ack(success=False, message="Internal error")
         
-    if(fileMeta[1] in self.clusterLeaders):
-        replicaIP = self.clusterLeaders[fileMeta[1]]
-        channel2 = self.clusterStatus.isChannelAlive(replicaIP)
+        if(channel2):
+            stub = fileService_pb2_grpc.FileserviceStub(channel2)
+            response = stub.FileDelete(fileService_pb2.FileInfo(username = request.username, filename = request.filename))
+            
+            if(response.success==True):
+                print("Successfully deleted from replica")
+                return fileService_pb2.ack(success=True, message="File successfully deleted from cluster : " + fileMeta[0])
+            else:
+                print("Could not delete from replica")
+                return fileService_pb2.ack(success=False, message="Internal error")
+            
 
-    if(channel1):
-        stub = fileService_pb2_grpc.FileserviceStub(channel1)
-        response = stub.FileDelete(fileService_pb2.FileInfo(username = request.username, filename = request.filename))
+
+    def FileSearch(self, request, context):
+        fileMeta = db.parseMetaData(request.username, request.filename)
+
+        primaryIP, replicaIP = -1,-1
+        channel1, channel2 = -1,-1
+
+        if(fileMeta[0] in self.clusterLeaders): 
+            primaryIP = self.clusterLeaders[fileMeta[0]]
+            channel1 = self.clusterStatus.isChannelAlive(primaryIP)
+            
+        if(fileMeta[1] in self.clusterLeaders):
+            replicaIP = self.clusterLeaders[fileMeta[1]]
+            channel2 = self.clusterStatus.isChannelAlive(replicaIP)
+
+        if(channel1):
+            stub = fileService_pb2_grpc.FileserviceStub(channel1)
+            response = stub.FileSearch(fileService_pb2.FileInfo(username = request.username, filename = request.filename))
+            if(response.success==True):
+                yield fileService_pb2.ack(success=True, message="File exists in the cluster : " + fileMeta[0])
+
+        elif(channel2):
+            stub = fileService_pb2_grpc.FileserviceStub(channel2)
+            response = stub.FileSearch(fileService_pb2.FileInfo(username = request.username, filename = request.filename))
+            if(response.success==True):
+                return fileService_pb2.ack(success=True, message="File exists in the replica cluster : " + fileMeta[1])
         
-        if(response.success==True):
-            return fileService_pb2.ack(success=True, message="File successfully deleted from cluster : " + fileMeta[0])
-        else:
-            return fileService_pb2.ack(success=False, message="Internal error")
-    
-    if(channel2):
-        stub = fileService_pb2_grpc.FileserviceStub(channel2)
-        response = stub.FileDelete(fileService_pb2.FileInfo(username = request.username, filename = request.filename))
-        
-        if(response.success==True):
-            return fileService_pb2.ack(success=True, message="File successfully deleted from cluster : " + fileMeta[0])
-        else:
-            return fileService_pb2.ack(success=False, message="Internal error")
-        
-        print(response.message)
-
-
-def FileSearch(self, request, data):
-    fileMeta = db.parseMetaData(request.username, request.filename)
-
-    primaryIP, replicaIP = -1,-1
-    channel1, channel2 = -1,-1
-
-    if(fileMeta[0] in self.clusterLeaders): 
-        primaryIP = self.clusterLeaders[fileMeta[0]]
-        channel1 = self.clusterStatus.isChannelAlive(primaryIP)
-        
-    if(fileMeta[1] in self.clusterLeaders):
-        replicaIP = self.clusterLeaders[fileMeta[1]]
-        channel2 = self.clusterStatus.isChannelAlive(replicaIP)
-
-    if(channel1):
-        stub = fileService_pb2_grpc.FileserviceStub(channel1)
-        response = stub.FileSearch(fileService_pb2.FileInfo(username = request.username, filename = request.filename))
-        if(response.success==True):
-            return fileService_pb2.ack(success=True, message="File exists in the cluster : " + fileMeta[0])
-
-    elif(channel2):
-        stub = fileService_pb2_grpc.FileserviceStub(channel2)
-        response = stub.FileSearch(fileService_pb2.FileInfo(username = request.username, filename = request.filename))
-        if(response.success==True):
-            return fileService_pb2.ack(success=True, message="File exists in the replica cluster : " + fileMeta[1])
-    
-    return fileService_pb2.ack(success=False, message="File does not exist in any cluster.")
+        return fileService_pb2.ack(success=False, message="File does not exist in any cluster.")
 
     
 
