@@ -22,7 +22,7 @@ class ClusterStatus():
                 stub = fileService_pb2_grpc.FileserviceStub(channel)
                 stats = stub.getClusterStats(fileService_pb2.Empty())
                 #print("stats=",stats)
-                total = float(stats.cpu_usage) + float(stats.disk_space) + float(stats.used_mem)
+                total = 300.00 - (float(stats.cpu_usage) + float(stats.disk_space) + float(stats.used_mem))
                 if ((total/3)<minVal):
                    minVal2 = minVal
                    minVal = total/3
