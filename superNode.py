@@ -14,7 +14,10 @@ from ClusterStatus import ClusterStatus
 
 _ONE_DAY_IN_SECONDS = 60 * 60 * 24
 
-
+#
+#   *** FileServer Service : FileServer service as per fileService.proto file. ***
+#   *** This class implements all the required methods to serve the user requests. *** 
+#
 class FileServer(fileService_pb2_grpc.FileserviceServicer):
     def __init__(self, hostIP, port):
         self.serverAddress = hostIP+":"+port
@@ -22,6 +25,10 @@ class FileServer(fileService_pb2_grpc.FileserviceServicer):
         self.clusterStatus = ClusterStatus()
         self.ip_channel_dict = {}
 
+    #
+    #   This service gets invoked when each cluster's leader informs the supernode
+    #   about who the current cluster leader is
+    #
     def getLeaderInfo(self, request, context):
         print("getLeaderInfo Called")
         address = request.ip + ":" + request.port
@@ -31,9 +38,13 @@ class FileServer(fileService_pb2_grpc.FileserviceServicer):
         self.ip_channel_dict[address] = channel
         return fileService_pb2.ack(success=True, message="Leader Updated.")
 
+    #
+    #   This service gets invoked when client uploads a new file.
+    #
     def UploadFile(self, request_iterator, context):
         print("Inside Server method ---------- UploadFile")
         
+        # Get the two clusters that have the most resources based on cluster stats
         node, node_replica, clusterName, clusterReplica = self.clusterStatus.leastUtilizedNode(self.clusterLeaders)
        
         if(node==-1):
@@ -68,19 +79,25 @@ class FileServer(fileService_pb2_grpc.FileserviceServicer):
         
         resp1 = stub1.UploadFile(sendDataStreaming(username, filename, request.data))
         
-        # Replicate to alternate cluster
+        # Replicate current file to alternate cluster
         if(stub2 is not None):
             t1 = Thread(target=self.replicateData, args=(stub2,username,filename,data,))
             t1.start()
 
+        # save Meta Map of username+filename->clusterName that its stored on
         if(resp1.success):
             db.saveMetaData(username, filename, clusterName, clusterReplica)
             db.saveUserFile(username, filename)
         
         return resp1
 
+
+    #
+    #   This service gets invoked when user requests an uploaded file.
+    #
     def DownloadFile(self, request, context):
 
+         # Check if file exists
         if(self.fileExists(request.username, request.filename)==False):
             return fileService_pb2.FileData(username=request.username, filename=request.filename, data=bytes("",'utf-8'))
 
@@ -109,10 +126,15 @@ class FileServer(fileService_pb2_grpc.FileserviceServicer):
         else:
             return fileService_pb2.FileData(username=request.username, filename=request.filename, data=bytes("",'utf-8'))
 
+    #
+    #   Function to check if file exists in db (redis)
+    #  
     def fileExists(self,username, filename):
         return db.keyExists(username + "_" + filename)
 
-
+    #
+    #   Function that takes care of file replication on alternate cluster
+    #  
     def replicateData(self,stub, username, filename, data):
         
         def streamData(username, filename, data):
@@ -127,6 +149,10 @@ class FileServer(fileService_pb2_grpc.FileserviceServicer):
             
         resp = stub.UploadFile(streamData(username,filename,data))
 
+
+    #
+    #   This services is invoked when user wants to delete a file
+    #  
     def FileDelete(self, request, context):
         print("In FileDelete")
 
@@ -149,26 +175,22 @@ class FileServer(fileService_pb2_grpc.FileserviceServicer):
         print("PrimarIP={}, replicaIP={}".format(primaryIP,replicaIP))
 
         if(channel1!=-1):
-            print("Making fileDelete call to primary")
             stub = fileService_pb2_grpc.FileserviceStub(channel1)
             response = stub.FileDelete(fileService_pb2.FileInfo(username = request.username, filename = request.filename))
-            print("Received response = ", response.success)
         
         if(channel2!=-1):
-            print("Making fileDelete call to replica")
             stub = fileService_pb2_grpc.FileserviceStub(channel2)
             response = stub.FileDelete(fileService_pb2.FileInfo(username = request.username, filename = request.filename))
-            print("Received response = ", response.success)
 
         if(response.success==True):
             db.deleteEntry(request.username + "_" + request.filename)
-            print("Successfully deleted.")
             return fileService_pb2.ack(success=True, message="File successfully deleted from cluster : " + fileMeta[0])
         else:
-            print("Could not delete from replica")
             return fileService_pb2.ack(success=False, message="Internal error")
             
-
+    #
+    #   This services is invoked when user wants to check if a file exists
+    #  
     def FileSearch(self, request, context):
 
         if(self.fileExists(request.username, request.filename)==False):
@@ -200,11 +222,12 @@ class FileServer(fileService_pb2_grpc.FileserviceServicer):
         else:
             return fileService_pb2.ack(success=False, message="File does not exist in any cluster.")
 
-    
+    #
+    #   This services lists all files under a user
+    #  
     def FileList(self, request, context):
         userFiles = db.getUserFiles(request.username)
         return fileService_pb2.FileListResponse(Filenames=str(userFiles))
-
 
 
 def run_server(hostIP, port):
