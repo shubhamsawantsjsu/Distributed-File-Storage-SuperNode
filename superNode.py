@@ -53,7 +53,7 @@ class FileServer(fileService_pb2_grpc.FileserviceServicer):
         
         for request in request_iterator:
             filename, username = request.filename, request.username
-            #data=request.data
+            data=request.data
             break
         
         if(self.fileExists(username, filename)):
@@ -63,18 +63,19 @@ class FileServer(fileService_pb2_grpc.FileserviceServicer):
         def sendDataStreaming(username, filename, data):
             yield fileService_pb2.FileData(username=username, filename=filename, data=data)
             for request in request_iterator:
-                #data+=request.data
+                data+=request.data
                 yield fileService_pb2.FileData(username=request.username, filename=request.filename, data=request.data)
         
         resp1 = stub1.UploadFile(sendDataStreaming(username, filename, request.data))
         
         # Replicate to alternate cluster
-        # if(stub2 is not None):
-        #     t1 = Thread(target=self.replicateData, args=(stub2,username,filename,data,))
-        #     t1.start()
+        if(stub2 is not None):
+            t1 = Thread(target=self.replicateData, args=(stub2,username,filename,data,))
+            t1.start()
 
         if(resp1.success):
             db.saveMetaData(username, filename, clusterName, clusterReplica)
+            db.saveUserFile(username, filename)
         
         return resp1
 
@@ -168,7 +169,6 @@ class FileServer(fileService_pb2_grpc.FileserviceServicer):
             return fileService_pb2.ack(success=False, message="Internal error")
             
 
-
     def FileSearch(self, request, context):
 
         if(self.fileExists(request.username, request.filename)==False):
@@ -201,6 +201,10 @@ class FileServer(fileService_pb2_grpc.FileserviceServicer):
             return fileService_pb2.ack(success=False, message="File does not exist in any cluster.")
 
     
+    def FileList(self, request, context):
+        userFiles = db.getUserFiles(request.username)
+        return fileService_pb2.FileListResponse(Filenames=str(userFiles))
+
 
 
 def run_server(hostIP, port):

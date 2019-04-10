@@ -20,4 +20,14 @@ def keyExists(key):
 def deleteEntry(key):
     r.delete(key)
 
+def getUserFiles(username):
+    return r.get(username).decode('utf-8')
+
+def saveUserFile(username, filename):
+    key = username + "_" + filename
+    if(keyExists(key)):
+        l=ast.literal_eval(r.get(key).decode('utf-8'))
+        l.append(filename)
+        r.set(key,str(l))
+    
 
