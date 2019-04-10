@@ -17,4 +17,7 @@ def parseMetaData(username, filename):
 def keyExists(key):
     return r.exists(key)
 
+def deleteEntry(key):
+    r.delete(key)
+
 
